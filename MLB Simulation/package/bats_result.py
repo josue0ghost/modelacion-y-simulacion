@@ -1,4 +1,4 @@
-class BatResult:
+class BatsResult:
 
     scenario = ""
     team = ""

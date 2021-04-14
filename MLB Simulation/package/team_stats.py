@@ -17,7 +17,7 @@ class TeamStats:
         super().__init__()
 
     @property
-    def base_On_balls(self):
+    def base_on_balls(self):
         return self.base_on_balls
     
     @property
