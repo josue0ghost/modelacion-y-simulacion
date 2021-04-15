@@ -1,5 +1,5 @@
 import pandas as pd
-import mysql.connector
+import pyodbc
 import random
 import datetime
 
@@ -149,15 +149,6 @@ class TeamStats:
     @triple.setter
     def triple(self,value):
         self._triple = value
-
-class BatsResult:
-
-    scenario = ""
-    team = ""
-
-    def __init__(self, scenario, team):
-        self.scenario = scenario
-        self.team = team
 
 class Inning:
     
@@ -438,8 +429,6 @@ class Game:
             v_inning = v_inning.add_plate()
             v_inning = v_inning.out(scenario.outs)
             v_inning = v_inning.move(scenario.moves)
-            self._simulations.append(BatsResult(scenario.name, data.Name))
-        
         while v_inning.is_active:
             v_inning = v_inning.out(1)
 
@@ -498,21 +487,10 @@ class Journie:
                 self.results[item.TeamA.Name] = False
                 self.results[item.TeamB.Name] = True
 
-class Batting:
-    scenario = ""
-    team = ""
-    count = 0
-
-    def __init__(self, scenario, team):
-        self.scenario = scenario
-        self.team = team
-        self.count = 1
-
 class Season:
     # Private attributes
     __results = {}
     __journies = []
-    __summary = []
 
     @property
     def results(self):
@@ -521,10 +499,6 @@ class Season:
     @property
     def journies(self):
         return self.__journies
-    
-    @property
-    def summary(self):
-        return self.__summary
 
 
     def __init__(self, teams = []):
@@ -558,22 +532,6 @@ class Season:
                     self.__results[key][0] = res[0] + 1
                 else:
                     self.__results[key][1] = res[1] + 1
-
-        def first_or_default(summary = [], team="", scenario=""):
-            for item in summary:
-                if item.team == team and item.scenario == scenario:
-                    return item
-            return
-
-        self.__summary = []
-        for journy in self.journies:
-            for game in journy.games:
-                for simulation in game.Simulations:
-                    item = first_or_default(self.__summary, simulation.team, simulation.scenario)
-                    if item == None:
-                        self.__summary.append(Batting(simulation.scenario, simulation.team))
-                    else:
-                        item.count += 1
         #end
 
     def combination(self, teams=[]):
@@ -614,54 +572,16 @@ class Engine:
     seasons = []
 
     def __init__(self, simulations):
-        db = mysql.connector.connect(
-            host = "localhost",
-            user = "root",
-            passwd = "",
-            database = "db_modelacion",
-            port = 3306
-        )
+        conn = pyodbc.connect('Driver={SQL Server};'
+                      'Server=localhost;'
+                      'Database=modelacion;'
+                      'Trusted_Connection=yes;')
         '''
         
         '''
         #1433 for SQL
         SQL = "SELECT * FROM teamStats"
-        '''
-        SQL = """
-            SELECT
-                teamID
-                ,SUM(Singles) Singles
-                ,SUM(Doubles) Doubles
-                ,SUM(Triples) Triples
-                ,SUM(HomeRuns) HomeRuns
-                ,SUM(BaseOnBalls) BaseOnBalls
-                ,SUM(HitByPitch) HitByPitch
-                ,SUM(Sacrifice) Sacrifice
-                ,SUM(DoublePlayed) DoublePlayed
-                ,SUM(StrikeOut) StrikeOut
-                ,SUM(FGOuts) FGOuts
-                ,SUM(Plates) Plates
-            FROM
-            (SELECT [playerID]
-                ,[teamID]
-                ,[H]-[_2B]-[_3B]-[HR] AS [Singles]
-                ,[_2B] AS [Doubles]
-                ,[_3B] AS [Triples]
-                ,[HR] AS [HomeRuns]
-                ,[BB] AS [BaseOnBalls]
-                ,CAST([HBP] AS float) AS [HitByPitch]
-                ,CAST([SF] AS float) AS [Sacrifice]
-                ,[GIDP] AS [DoublePlayed]
-                ,[SO] AS [StrikeOut]
-                ,[AB]-[H]-[SO]-[GIDP] AS [FGOuts]
-                ,[AB]+[BB]+CAST([HBP] AS float)+CAST([SF] AS float) AS [Plates]
-            FROM [dbo].[Batting]
-            WHERE [yearID] = 2020) filtrado
-            GROUP BY teamID
-        """
-        '''
-
-        df = pd.read_sql_query(SQL, db)
+        df = pd.read_sql_query(SQL, conn)
         print(df)
 
         
@@ -687,14 +607,6 @@ print("======================================================")
 for item in eng.seasons:
     print(f"Season {iteration}: G/P")
     print(item.results)
-    #for res in item.results:
-    #    print(f"{item}")
-    it2 = 0
-    for summ in item.summary:
-        print(f"{item}")
-        results.append(f"{iteration},{summ.team},{summ.scenario},{len(summ)}")
-        print(results[it2])
-        it2 += 1
     iteration += 1
 print("======================================================")
 dfr = pd.DataFrame(results, columns=['Name'])
