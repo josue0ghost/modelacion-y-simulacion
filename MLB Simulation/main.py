@@ -86,6 +86,14 @@ class TeamStats:
         self._leagueID = item[13]
         self._divID = item[14]
         self.name = item[15]
+    
+    @property
+    def leagueID(self):
+        return self._leagueID
+    
+    @property
+    def divID(self):
+        return self._divID
 
     @property
     def base_on_balls(self):
@@ -582,17 +590,18 @@ class Engine:
 
     # Public attributes
     seasons = []
+    teams = {}
 
     def __init__(self, simulations):
         conn = pyodbc.connect(
             'Driver={SQL Server};'
-            'Server=url-2021.database.windows.net;'
-            'Database=mys_url;'
-            'UID=url_2021;'
-            'PWD=L0g!n_landivar2o21;'
+            'Server='
+            'Database='
+            'UID='
+            'PWD='
         )
 
-        #1433 for SQL
+        
         SQL = "SELECT * FROM teamStats"
         df = pd.read_sql_query(SQL, conn)
         print(df)
@@ -602,8 +611,11 @@ class Engine:
         
         index = 0
         for item in stats:
-            data.append(TeamData(TeamStats(item)))
+            st = TeamStats(item)
+            data.append(TeamData(st))
             index += 1
+        
+        # self.teams = {x.tea}
         
         for index in range(0, simulations):            
             self.__seasons.append(Season(data))
