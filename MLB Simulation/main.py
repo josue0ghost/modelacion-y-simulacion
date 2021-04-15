@@ -2,6 +2,7 @@ import pandas as pd
 import pyodbc
 import random
 import datetime
+import copy as cpy
 
 class Action:
     _key = ""
@@ -10,7 +11,7 @@ class Action:
     valueB = 0
 
     def __init__(self, key, count):
-        self.key = key
+        self._key = key
         self.count = count
     
     @property
@@ -64,6 +65,9 @@ class TeamStats:
     _strike_out = 0
     _fg_out = 0
     _plates = 0
+    _leagueID = ""
+    _divID = ""
+    name = ""
 
     def __init__(self, item):
         self.id = item[0]
@@ -78,7 +82,10 @@ class TeamStats:
         self._double_played = item[9]
         self._strike_out = item[10]
         self._fg_out = item[11]
-        self._plates = item[12] 
+        self._plates = item[12]
+        self._leagueID = item[13]
+        self._divID = item[14]
+        self.name = item[15]
 
     @property
     def base_on_balls(self):
@@ -160,7 +167,7 @@ class Inning:
     outs = 0
 
     def __init__(self):
-        self.__bases = [True, False, False, False, False]
+        self.__bases = [False, False, False, False, False]
         self.runs = 0
         self.outs = 0
 
@@ -176,27 +183,25 @@ class Inning:
         copy = Inning()
         copy.runs = self.runs
         copy.outs = self.outs
-        copy.__bases = self.__bases.copy()
+        copy.__bases = cpy.deepcopy(self.__bases)
         return copy
 
     def move(self, number=""):
         if number == "":
             copy = self.copy()
-            for i in range(4, 1, -1):
+            for i in range(4, 0, -1):
                 copy.__bases[i] = copy.__bases[i - 1]
             copy.__bases[0] = False
             if copy.__bases[4]:
                 copy.runs += 1
                 copy.__bases[4] = False
-            
             return copy
-
-        v_copy = self.copy()
-        while number > 0:
-            v_copy = v_copy.move()
-            number += -1
-        
-        return v_copy
+        else:
+            v_copy = self.copy()
+            while number > 0:
+                v_copy = v_copy.move()
+                number += -1
+            return v_copy
 
     def out(self, number=""):
         if number == "":
@@ -204,8 +209,7 @@ class Inning:
             copy.__bases[0] = False
             copy.outs += 1
             return copy
-
-        if number == 1:
+        elif number == 1:
             return self.out()
         elif number == 2:
             return self.double_play()
@@ -215,6 +219,7 @@ class Inning:
     def one_run(self, is_winner=True):
         ini = Inning()
         if is_winner:
+            ini = ini.add_plate()
             ini = ini.move(4)
 
         for i in range(3):
@@ -224,9 +229,9 @@ class Inning:
 
     def double_play(self):
         copy = self.out()
-        if copy.__bases[3]:
+        if copy.__bases[3] == True:
             copy.__bases[3] = False
-        elif copy.__bases[2]:
+        elif copy.__bases[2] == True:
             copy.__bases[2] = False
         else:
             copy.__bases[1] = False
@@ -239,8 +244,6 @@ class Inning:
         return copy
 
 class TeamData:
-    
-    
     _Name = ""
     _Counters = []
     _rangeA = []
@@ -270,8 +273,15 @@ class TeamData:
     def rangeB(self, value):
         self._rangeB = value
 
+    def to_dict(self):
+        return {
+            'Name': self.Name,
+            'rangeA': [ra.toString() for ra in self._rangeA],
+            'rangeB': [rb.toString() for rb in self._rangeB]
+        }
+
     def __init__(self, teamStats = TeamStats):
-        self.Name = teamStats.teamid,
+        self.Name = teamStats.teamid
         self.Counters = [Action("base_on_balls", teamStats.base_on_balls),
         Action("double_played",teamStats.double_played),
         Action("doubles",teamStats.doubles),
@@ -331,7 +341,7 @@ class Game:
     _RunsB = 0
 
     def get_bat_scenarios(self):
-        item = [0,"",0,0,0,0,0,0,0,0,0,0,0]
+        item = [0,"",0,0,0,0,0,0,0,0,0,0,0,"","",""]
         v_team_stats = TeamStats(item)
 
         l_scenarios = [
@@ -391,9 +401,6 @@ class Game:
         for i in self._ResultA:
             list.append(i.runs)
         return sum(list)
-    @RunsA.setter
-    def RunsA(self, value):
-        self._RunsA = value
         
     @property
     def RunsB(self):
@@ -401,10 +408,6 @@ class Game:
         for i in self._ResultB:
             list.append(i.runs)
         return sum(list)
-    
-    @RunsB.setter
-    def RunsB(self, value):
-        self._RunsB = value
 
     def playInning(self, data = TeamData):
         def firstElement(list = [], r = 0.0):
@@ -413,15 +416,15 @@ class Game:
                     return item
                     
         scenarios = self.get_bat_scenarios()
-        #random.seed( )
+        random.seed(datetime.datetime.now().microsecond)
         v_inning = Inning()
         while v_inning.is_active and v_inning.runs < 9 :
             rand = random.random()
             action = ""
-            if v_inning.have_runners:                
+            if v_inning.have_runners == True:                
                 element = firstElement(data.rangeA, rand)
                 action = element.action
-            else:
+            else:                
                 element = firstElement(data.rangeB, rand)
                 action = element.action
             
@@ -440,22 +443,24 @@ class Game:
         self.TeamB = b
         self.ResultA = []
         self.ResultB = []
-        self._simulations = []               
+        self._simulations = [] 
+
+        iterations = 0              
         while len(self.ResultA) < 9 and len(self.ResultB) < 9:
             self.ResultA.append(self.playInning(self.TeamA))
             self.ResultB.append(self.playInning(self.TeamB))
-        
+            iterations += 1
+
         extraInning = 11
 
         while self.RunsA == self.RunsB and extraInning > 0:
             self.ResultA.append(self.playInning(self.TeamA))
             self.ResultB.append(self.playInning(self.TeamB))
             extraInning += -1
-        
-        if self.RunsA == self.RunsB:
-            #random.seed( )
-            rand = random.random()
 
+        if self.RunsA == self.RunsB:
+            random.seed(datetime.datetime.now().microsecond)
+            rand = random.random()
             if rand < 0.5:
                 self.ResultA.append(Inning.one_run(True))
                 self.ResultB.append(Inning.one_run(False))
@@ -472,8 +477,16 @@ class Journie:
     # Private Attributes
     # __games = []
     # __results = {}
+    
+    def to_dict(self):
+        return {
+            'results': self.results
+        }
+
 
     def __init__(self, data):
+        self.games = []
+        self.results = {}
         for item in data:
             teamDataA = item[0]
             teamDataB = item[1]
@@ -486,7 +499,7 @@ class Journie:
             else:
                 self.results[item.TeamA.Name] = False
                 self.results[item.TeamB.Name] = True
-
+        
 class Season:
     # Private attributes
     __results = {}
@@ -507,26 +520,25 @@ class Season:
 
         for i in range(0, 54):
             serie = self.combination(teams)
-            #print(f"{i}:", serie)
             for j in range(0, 3):
-                self.__journies.append(Journie(serie))
+                temp = Journie(serie)
+                self.__journies.append(temp)
 
         self.__results = {}
         
         for item in teams:
             self.__results[item.Name] = [0,0]
         
+
         listJ = []
         index = 0
-        for j in self.__journies:
+        for j in self.journies:
             obj = type('', (object,), {'res':j.results})()
             listJ.append(obj)
-            #print("obj:", obj.res, "ListJ:", listJ[index])
             index += 1
 
         for dicc in listJ:
             for key,value in dicc.res.items():
-                #print(self.__results)
                 res = self.__results[key]
                 if value:
                     self.__results[key][0] = res[0] + 1
@@ -536,9 +548,9 @@ class Season:
 
     def combination(self, teams=[]):
         combs = []
-        copy = teams.copy()
+        copy = cpy.deepcopy(teams)
 
-        #random.seed( )
+        random.seed(datetime.datetime.now().microsecond)
         rand = random.random()
 
         while len(copy) > 0:
@@ -572,19 +584,19 @@ class Engine:
     seasons = []
 
     def __init__(self, simulations):
-        conn = pyodbc.connect('Driver={SQL Server};'
-                      'Server=localhost;'
-                      'Database=modelacion;'
-                      'Trusted_Connection=yes;')
-        '''
-        
-        '''
+        conn = pyodbc.connect(
+            'Driver={SQL Server};'
+            'Server=url-2021.database.windows.net;'
+            'Database=mys_url;'
+            'UID=url_2021;'
+            'PWD=L0g!n_landivar2o21;'
+        )
+
         #1433 for SQL
         SQL = "SELECT * FROM teamStats"
         df = pd.read_sql_query(SQL, conn)
         print(df)
 
-        
         stats = df.values.tolist()
         data = []
         
@@ -592,28 +604,21 @@ class Engine:
         for item in stats:
             data.append(TeamData(TeamStats(item)))
             index += 1
-
         
         for index in range(0, simulations):            
             self.__seasons.append(Season(data))
-
-        self.seasons = self.__seasons.copy()
+        
+        self.seasons = cpy.deepcopy(self.__seasons)
         
 
 eng = Engine(1)
 iteration = 1
 results = []
-print("======================================================")
 for item in eng.seasons:
-    print(f"Season {iteration}: G/P")
-    print(item.results)
+    results.append([iteration, item.results])
     iteration += 1
 print("======================================================")
-dfr = pd.DataFrame(results, columns=['Name'])
+dfr = pd.DataFrame(results, columns=['Season', 'Results'])
 print(dfr)
 print("======================================================")
-i = 1
-for item in results:
-    print(f"item {i}", item)
-    i += 1
 print("Simulation finished")
