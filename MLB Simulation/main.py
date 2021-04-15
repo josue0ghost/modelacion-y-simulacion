@@ -331,6 +331,13 @@ class TeamData:
             counter+=item.valueB
 
 class Game:
+    _TeamA = TeamData
+    _TeamB = TeamData
+    _ResultA = []
+    _ResultB = []
+    _simulations = []
+    _RunsA = 0
+    _RunsB = 0
 
     def get_bat_scenarios(self):
         item = [0,"",0,0,0,0,0,0,0,0,0,0,0]
@@ -349,14 +356,6 @@ class Game:
             BatScenario("fg_outs", 0, 1),
         ]
         return {scenarios.name : scenarios for scenarios in l_scenarios}
-
-    _TeamA = TeamData
-    _TeamB = TeamData
-    _ResultA = []
-    _ResultB = []
-    _simulations = []
-    _RunsA = 0
-    _RunsB = 0
 
     @property
     def TeamA(self):
@@ -428,18 +427,18 @@ class Game:
         while v_inning.is_active and v_inning.runs < 9 :
             rand = random.random()
             action = ""
-            if v_inning.have_runners:
-                element = firstElement(data._rangeA, rand)
+            if v_inning.have_runners:                
+                element = firstElement(data.rangeA, rand)
                 action = element.action
             else:
-                element = firstElement(data._rangeB, rand)
+                element = firstElement(data.rangeB, rand)
                 action = element.action
             
             scenario = scenarios[action]
             v_inning = v_inning.add_plate()
             v_inning = v_inning.out(scenario.outs)
             v_inning = v_inning.move(scenario.moves)
-            self.simulations.append(BatsResult(scenario.name, data.Name))
+            self._simulations.append(BatsResult(scenario.name, data.Name))
         
         while v_inning.is_active:
             v_inning = v_inning.out(1)
@@ -452,7 +451,7 @@ class Game:
         self.TeamB = b
         self.ResultA = []
         self.ResultB = []
-        self.simulations = []               
+        self._simulations = []               
         while len(self.ResultA) < 9 and len(self.ResultB) < 9:
             self.ResultA.append(self.playInning(self.TeamA))
             self.ResultB.append(self.playInning(self.TeamB))
@@ -530,31 +529,35 @@ class Season:
 
     def __init__(self, teams = []):
 
-        __journies = []
+        self.__journies = []
 
         for i in range(0, 54):
             serie = self.combination(teams)
-            
+            #print(f"{i}:", serie)
             for j in range(0, 3):
-                __journies.append(Journie(serie))
+                self.__journies.append(Journie(serie))
 
-        __result = {}
+        self.__results = {}
         
         for item in teams:
-            __result[item.Name] = [0,0]
+            self.__results[item.Name] = [0,0]
         
         listJ = []
+        index = 0
         for j in self.__journies:
             obj = type('', (object,), {'res':j.results})()
             listJ.append(obj)
+            #print("obj:", obj.res, "ListJ:", listJ[index])
+            index += 1
 
         for dicc in listJ:
             for key,value in dicc.res.items():
-                res = __result[key]
+                #print(self.__results)
+                res = self.__results[key]
                 if value:
-                    __result[key][0] = res[0] + 1
+                    self.__results[key][0] = res[0] + 1
                 else:
-                    __result[key][1] = res[1] + 1
+                    self.__results[key][1] = res[1] + 1
 
         def first_or_default(summary = [], team="", scenario=""):
             for item in summary:
@@ -562,20 +565,20 @@ class Season:
                     return item
             return
 
-        summary = []
+        self.__summary = []
         for journy in self.journies:
             for game in journy.games:
                 for simulation in game.Simulations:
-                    item = first_or_default(summary, simulation.team, simulation.scenario)
+                    item = first_or_default(self.__summary, simulation.team, simulation.scenario)
                     if item == None:
-                        summary.append(Batting(simulation.scenario, simulation.team))
+                        self.__summary.append(Batting(simulation.scenario, simulation.team))
                     else:
                         item.count += 1
         #end
 
     def combination(self, teams=[]):
         combs = []
-        copy = teams
+        copy = teams.copy()
 
         #random.seed( )
         rand = random.random()
@@ -618,9 +621,50 @@ class Engine:
             database = "db_modelacion",
             port = 3306
         )
+        '''
+        
+        '''
         #1433 for SQL
         SQL = "SELECT * FROM teamStats"
+        '''
+        SQL = """
+            SELECT
+                teamID
+                ,SUM(Singles) Singles
+                ,SUM(Doubles) Doubles
+                ,SUM(Triples) Triples
+                ,SUM(HomeRuns) HomeRuns
+                ,SUM(BaseOnBalls) BaseOnBalls
+                ,SUM(HitByPitch) HitByPitch
+                ,SUM(Sacrifice) Sacrifice
+                ,SUM(DoublePlayed) DoublePlayed
+                ,SUM(StrikeOut) StrikeOut
+                ,SUM(FGOuts) FGOuts
+                ,SUM(Plates) Plates
+            FROM
+            (SELECT [playerID]
+                ,[teamID]
+                ,[H]-[_2B]-[_3B]-[HR] AS [Singles]
+                ,[_2B] AS [Doubles]
+                ,[_3B] AS [Triples]
+                ,[HR] AS [HomeRuns]
+                ,[BB] AS [BaseOnBalls]
+                ,CAST([HBP] AS float) AS [HitByPitch]
+                ,CAST([SF] AS float) AS [Sacrifice]
+                ,[GIDP] AS [DoublePlayed]
+                ,[SO] AS [StrikeOut]
+                ,[AB]-[H]-[SO]-[GIDP] AS [FGOuts]
+                ,[AB]+[BB]+CAST([HBP] AS float)+CAST([SF] AS float) AS [Plates]
+            FROM [dbo].[Batting]
+            WHERE [yearID] = 2020) filtrado
+            GROUP BY teamID
+        """
+        '''
+
         df = pd.read_sql_query(SQL, db)
+        print(df)
+
+        
         stats = df.values.tolist()
         data = []
         
@@ -630,18 +674,34 @@ class Engine:
             index += 1
 
         
-        for index in range(0, simulations):
+        for index in range(0, simulations):            
             self.__seasons.append(Season(data))
 
         self.seasons = self.__seasons.copy()
+        
 
-eng = Engine(100)
+eng = Engine(1)
 iteration = 1
-
+results = []
+print("======================================================")
 for item in eng.seasons:
     print(f"Season {iteration}: G/P")
-    for res in item.results:
+    print(item.results)
+    #for res in item.results:
+    #    print(f"{item}")
+    it2 = 0
+    for summ in item.summary:
         print(f"{item}")
+        results.append(f"{iteration},{summ.team},{summ.scenario},{len(summ)}")
+        print(results[it2])
+        it2 += 1
     iteration += 1
-
+print("======================================================")
+dfr = pd.DataFrame(results, columns=['Name'])
+print(dfr)
+print("======================================================")
+i = 1
+for item in results:
+    print(f"item {i}", item)
+    i += 1
 print("Simulation finished")
