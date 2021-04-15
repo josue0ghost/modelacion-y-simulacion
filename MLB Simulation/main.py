@@ -611,14 +611,16 @@ class Engine:
         self.seasons = cpy.deepcopy(self.__seasons)
         
 
-eng = Engine(1)
+eng = Engine(2)
 iteration = 1
 results = []
 for item in eng.seasons:
-    results.append([iteration, item.results])
+    for key,value in item.results.items():
+        results.append([iteration, key, value[0], value[1]])
+        #results.append([iteration, item.results])
     iteration += 1
 print("======================================================")
-dfr = pd.DataFrame(results, columns=['Season', 'Results'])
+dfr = pd.DataFrame(results, columns=['Season', 'TEAM_ID', 'WINS', 'LOSSES'])
 print(dfr)
 print("======================================================")
 print("Simulation finished")
