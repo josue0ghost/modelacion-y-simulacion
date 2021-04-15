@@ -627,14 +627,169 @@ class Engine:
 
 eng = Engine(1)
 iteration = 1
+rowNum = 0
 results = []
 for item in eng.seasons:
     for key,value in item.results.items():
         t = eng.teams[key]
-        results.append([iteration, key, t.name, t.leagueID, t.divID, value[0], value[1]]) 
+        results.append([rowNum, iteration, key, t.name, t.leagueID, t.divID, value[0], value[1]])
+        rowNum += 1
     iteration += 1
 print("======================================================")
-dfr = pd.DataFrame(results, columns=['Season', 'TEAM_ID', 'TEAM_NAME', 'LEAGUE', 'DIVISION', 'WINS', 'LOSSES'])
+dfr = pd.DataFrame(results, columns=['RowNum', 'Season', 'TEAM_ID', 'TEAM_NAME', 'LEAGUE', 'DIVISION', 'WINS', 'LOSSES'])
 print(dfr)
 print("======================================================")
 print("Simulation finished")
+
+
+# Post Season Tagging
+
+class SimTeamRes:
+    _srtID = 0
+    _iteracion = 0
+    _teamID = ""
+    _teamName = ""
+    _league = ""
+    _division = ""
+    _wins = 0
+    _losses = 0
+
+    leagueRank = 0
+    divRank = 0
+    isInPS = ""
+
+    def toRow(self):
+        row = []
+        row.append(self._srtID)
+        row.append(self._iteracion)
+        row.append(self._teamID)
+        row.append(self._teamName)
+        row.append(self._league)
+        row.append(self._division)
+        row.append(self._wins)
+        row.append(self._losses)
+        row.append(self.leagueRank)
+        row.append(self.divRank)
+        row.append(self.isInPS)
+        return row
+
+    def __init__(self, item):
+        self._srtID = item[0]
+        self._iteracion = item[1]
+        self._teamID = item[2]
+        self._teamName = item[3]
+        self._league = item[4]
+        self._division = item[5]
+        self._wins = item[6]
+        self._losses = item[7]
+        self.isInPS = False
+    
+    @property
+    def srtID(self):
+        return self._srtID
+    @property
+    def iteration(self):
+        return self._iteracion
+    @property
+    def teamID(self):
+        return self._teamID
+    @property
+    def teamName(self):
+        return self._teamName
+    @property
+    def league(self):
+        return self._league
+    @property
+    def division(self):
+        return self._division
+    @property
+    def wins(self):
+        return self._wins
+    @property
+    def losses(self):
+        return self._losses
+
+STRlist = []
+dfr.sort_values(by='RowNum', ascending=True, inplace=True)
+for line in dfr.values.tolist():
+    STRlist.append(SimTeamRes(line))
+
+# assign positons
+iterationsCount = int(len(STRlist) / 30)
+for i in range(0, iterationsCount):
+    seasonNum = i + 1
+    nlTable = dfr.query('Season == ' + str(seasonNum) + ' and LEAGUE == "NL"', inplace = False)
+    alTable = dfr.query('Season == ' + str(seasonNum) + ' and LEAGUE == "AL"', inplace = False)
+    # functions to assign positions
+    def leaguePos(sortedDF):
+        lpos = 1
+        lis = sortedDF.values.tolist()
+        for row in lis:
+            rowNum = row[0]
+            STRlist[rowNum].leagueRank = lpos
+            lpos += 1
+    def divisionPos(sortedDF):
+        dpos = 1
+        lis = sortedDF.values.tolist()
+        for row in lis:
+            rowNum = row[0]
+            STRlist[rowNum].divRank = dpos
+            dpos += 1
+    # sort for position in league
+    nlTable.sort_values(by=['WINS'], ascending=False, inplace=True)
+    leaguePos(nlTable)
+    alTable.sort_values(by=['WINS'], ascending=False, inplace=True)
+    leaguePos(alTable)
+    # sort for positions in Division
+    for div in ["W","C","E"]:
+        # NL
+        qd = 'DIVISION == "' + div + '"'
+        nldTable = nlTable.query(qd, inplace=False)
+        nldTable.sort_values(by=['WINS'], ascending=False, inplace=True)
+        divisionPos(nldTable)
+        # AL
+        aldTable = alTable.query(qd, inplace=False)
+        aldTable.sort_values(by=['WINS'], ascending=False, inplace=True)
+        divisionPos(aldTable)
+# rules for Post Season
+for item in STRlist:
+    if(item.divRank == 1):
+        item.isInPS = True
+
+for i in range(0, iterationsCount):
+    seasonNum = i + 1
+    def extraInLeague(l):
+        def candFilter(strObj):
+            val = True
+            val = val & (strObj.iteration == seasonNum)
+            val = val & (strObj.divRank != 1)
+            val = val & (strObj.league == l)
+            return val
+        candidateList = list(filter(candFilter ,STRlist))
+        candidateList.sort(key=lambda x: x.leagueRank)
+        if(candidateList[0].wins > candidateList[1].wins):
+            srtID = candidateList[0].srtID
+            STRlist[srtID].isInPS = True
+        else:
+            random.seed(datetime.datetime.now().microsecond)
+            rand = random.random()
+            if(rand < 0.5):
+                srtID = candidateList[0].srtID
+                STRlist[srtID].isInPS = True
+            else:
+                srtID = candidateList[1].srtID
+                STRlist[srtID].isInPS = True
+    extraInLeague("NL")
+    extraInLeague("AL")
+
+positonsResults = []
+for item in STRlist:
+    positonsResults.append(item.toRow())
+print("======================================================")
+cols=['RowNum', 'Season', 'TEAM_ID', 'TEAM_NAME', 'LEAGUE', 'DIVISION', 'WINS', 'LOSSES','LEAGUE_RANK','DIV_RANK','POSTSEASON']
+finalDFR = pd.DataFrame(positonsResults, columns=cols)
+print(finalDFR)
+print("======================================================")
+print("Post Season Tagging Finished")
+
+
