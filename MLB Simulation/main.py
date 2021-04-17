@@ -359,7 +359,7 @@ class Game:
             BatScenario("home_runs", 4, 0),
             BatScenario("base_on_balls", 1, 0),
             BatScenario("hit_by_pitch", 1, 0),
-            BatScenario("sacrifice", 1, 0),
+            BatScenario("sacrifice", 1, 1),
             BatScenario("strike_out", 0, 1),
             BatScenario("double_played", 0, 2),
             BatScenario("fg_outs", 0, 1),
@@ -439,7 +439,8 @@ class Game:
             scenario = scenarios[action]
             v_inning = v_inning.add_plate()
             v_inning = v_inning.out(scenario.outs)
-            v_inning = v_inning.move(scenario.moves)
+            if(v_inning.is_active):
+                v_inning = v_inning.move(scenario.moves)
         while v_inning.is_active:
             v_inning = v_inning.out(1)
 
@@ -595,10 +596,10 @@ class Engine:
     def __init__(self, simulations):
         conn = pyodbc.connect(
             'Driver={SQL Server};'
-            'Server='
-            'Database='
-            'UID='
-            'PWD='
+            'Server=url-2021.database.windows.net;'
+            'Database=mys_url;'
+            'UID=url_2021;'
+            'PWD=L0g!n_landivar2o21;'
         )
 
         
