@@ -3,6 +3,7 @@ import pyodbc
 import random
 import datetime
 import copy as cpy
+import sys
 
 class Action:
     _key = ""
@@ -593,17 +594,55 @@ class Engine:
     seasons = []
     teams = {}
 
-    def __init__(self, simulations):
+    def __init__(self, simulations, year):
         conn = pyodbc.connect(
             'Driver={SQL Server};'
-            'Server=;'
-            'Database=;'
-            'UID=;'
-            'PWD=;'
+            'Server=url-2021.database.windows.net;'
+            'Database=mys_url;'
+            'UID=url_2021;'
+            'PWD=L0g!n_landivar2o21;'
         )
 
         
-        SQL = "SELECT * FROM teamStats"
+        SQL = """
+        SELECT
+            1 Id
+            ,b.*
+            ,t.lgID
+            ,t.divID
+            ,t.name
+        FROM
+            (SELECT
+                teamID
+                ,SUM(Singles) Singles
+                ,SUM(Doubles) Doubles
+                ,SUM(Triples) Triples
+                ,SUM(HomeRuns) HomeRuns
+                ,SUM(BaseOnBalls) BaseOnBalls
+                ,SUM(HitByPitch) HitByPitch
+                ,SUM(Sacrifice) Sacrifice
+                ,SUM(DoublePlayed) DoublePlayed
+                ,SUM(StrikeOut) StrikeOut
+                ,SUM(FGOuts) FGOuts
+                ,SUM(Plates) Plates
+            FROM
+            (SELECT [playerID]
+                ,[teamID]
+                ,[H]-[_2B]-[_3B]-[HR] AS [Singles]
+                ,[_2B] AS [Doubles]
+                ,[_3B] AS [Triples]
+                ,[HR] AS [HomeRuns]
+                ,[BB] AS [BaseOnBalls]
+                ,CAST([HBP] AS float) AS [HitByPitch]
+                ,CAST([SF] AS float) AS [Sacrifice]
+                ,[GIDP] AS [DoublePlayed]
+                ,[SO] AS [StrikeOut]
+                ,[AB]-[H]-[SO]-[GIDP] AS [FGOuts]
+                ,[AB]+[BB]+CAST([HBP] AS float)+CAST([SF] AS float) AS [Plates]
+            FROM [dbo].[Batting]
+        """
+        SQL = SQL + f" WHERE [yearID] = {str(year)}) filtrado GROUP BY teamID) b"
+        SQL = SQL + " JOIN [dbo].[Teams] t ON b.teamID = t.teamID AND t.yearID = " + str(year)
         df = pd.read_sql_query(SQL, conn)
 
         stats = df.values.tolist()
@@ -692,7 +731,16 @@ class SimulationsTeamResults:
     def losses(self):
         return self._losses
 
-eng = Engine(2)
+def parceParam(message):
+    param = -1
+    while(param < 0):    
+        param = input(message)
+        param = int(param)
+    return param
+
+yearToSim = parceParam("Year: ")
+simC = parceParam("Simulations: ")
+eng = Engine(simC, yearToSim)
 iteration = 1
 rowNum = 0
 results = []
@@ -783,8 +831,114 @@ for item in STRlist:
 print("======================================================")
 cols=['RowNum', 'Season', 'TEAM_ID', 'TEAM_NAME', 'LEAGUE', 'DIVISION', 'WINS', 'LOSSES','LEAGUE_RANK','DIV_RANK','POSTSEASON']
 finalDFR = pd.DataFrame(positonsResults, columns=cols)
+
+f = open('simResults'+ str(yearToSim) +'.txt', 'w')
+f.write(toStr(cols) + '\n')
+for row in positonsResults:
+    f.write(toStr(row) + '\n')
+f.close()
+
 print(finalDFR)
 print("======================================================")
 print("Post Season Tagging Finished")
+print("======================================================")
 
+#  Verification
 
+def specialTranformation(df):
+    lis = df.values.tolist()
+    v = []
+    for val in lis:
+        v.append(val[0])
+    return v
+
+def getTeamList():
+    dbc = pyodbc.connect(
+        'Driver={SQL Server};'
+        'Server=url-2021.database.windows.net;'
+        'Database=mys_url;'
+        'UID=url_2021;'
+        'PWD=L0g!n_landivar2o21;'
+    )
+
+    SQL = """
+    SELECT [teamID]
+    FROM [dbo].[Teams]
+    WHERE ([DivWin] = 'Y' OR [WCWin] = 'Y') AND
+    """
+    SQL = SQL + f" [yearID] = {str(yearToSim)}"
+
+    qdf = pd.read_sql_query(SQL, dbc)
+    return specialTranformation(qdf)
+    
+psRealTeams = getTeamList()
+
+class Validation:
+    iteration = 0
+    truePositive = 0
+    falsePositive = 0
+    trueNegative = 0
+    falseNegative = 0
+
+    def toRow(self):
+        good = self.truePositive + self.trueNegative
+        total = self.falsePositive + self.falseNegative + good
+        ratio = float(good) / float(total)
+        return [
+            self.iteration,
+            self.truePositive,
+            self.falsePositive,
+            self.trueNegative,
+            self.falseNegative,
+            good,
+            total,
+            ratio
+        ]
+
+validations = []
+
+for i in range(0, iterationsCount):
+    seasonNum = i + 1
+    simResults = finalDFR.query('Season == ' + str(seasonNum), inplace = False)[["TEAM_ID","POSTSEASON"]]
+    simPositives = specialTranformation(simResults.query("POSTSEASON == True", inplace = False))
+    simNegatives = specialTranformation(simResults.query("POSTSEASON == False", inplace = False))
+    # start season validation
+    sv = Validation()
+    sv.iteration =seasonNum
+    for positive in simPositives:
+        if any(positive in s for s in psRealTeams):
+            sv.truePositive += 1
+        else:
+            sv.falsePositive += 1
+    for negative in simNegatives:
+        if any(negative in s for s in psRealTeams):
+            sv.falseNegative += 1
+        else:
+            sv.trueNegative += 1
+    validations.append(sv)
+
+# print Validations
+def toStr(l = list, separator = '\t'):
+    s = ''
+    for i in l:
+        s = s + str(i) + separator
+    return s
+
+f = open('simResults'+ str(yearToSim) +'.txt', 'w')
+f.write(toStr(cols) + '\n')
+for row in positonsResults:
+    f.write(toStr(row) + '\n')
+f.close()
+
+f = open('simValidations'+ str(yearToSim) +'.txt', 'w')
+print('Real Teams = ' + toStr(psRealTeams,' ') + '\n')
+print(toStr(['i','T+','F+','T-','F-','good','total','ratio']))
+for item in validations:
+    text = toStr(item.toRow()) 
+    print(text)
+    f.write(text + '\n')
+f.close()
+
+print("======================================================")
+print("Validations Finished")
+     
