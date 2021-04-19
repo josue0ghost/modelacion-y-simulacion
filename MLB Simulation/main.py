@@ -596,10 +596,10 @@ class Engine:
     def __init__(self, simulations):
         conn = pyodbc.connect(
             'Driver={SQL Server};'
-            'Server=url-2021.database.windows.net;'
-            'Database=mys_url;'
-            'UID=url_2021;'
-            'PWD=L0g!n_landivar2o21;'
+            'Server=;'
+            'Database=;'
+            'UID=;'
+            'PWD=;'
         )
 
         
@@ -768,23 +768,11 @@ for i in range(0, iterationsCount):
         candidateList = list(filter(candFilter, STRlist))
         candidateList.sort(key=lambda x: x.leagueRank)
 
-        teamid_A = candidateList[0].teamID
-        teamid_B = candidateList[1].teamID
+        teamid_A = candidateList[0].strID
+        teamid_B = candidateList[1].strID
 
-        team_stats_A = eng.teams[teamid_A]
-        team_stats_B = eng.teams[teamid_B]
-
-        team_data_A = TeamData(team_stats_A)
-        team_data_B = TeamData(team_stats_B)
-
-        game = Game(team_data_A, team_data_B)
-
-        if(game.RunsA > game.RunsB):
-            strID = candidateList[0].strID
-            STRlist[strID].isInPS = True
-        else:
-            strID = candidateList[1].strID
-            STRlist[strID].isInPS = True
+        STRlist[teamid_A].isInPS = True
+        STRlist[teamid_B].isInPS = True
 
     extraInLeague("NL")
     extraInLeague("AL")
