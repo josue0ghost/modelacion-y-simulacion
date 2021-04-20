@@ -5,13 +5,6 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Post Season Tgas",
-            "type": "python",
-            "request": "launch",
-            "program": ".\\MLB Simulation\\pstagging.py",
-            "console": "integratedTerminal"
-        },
-        {
             "name": "Run Main",
             "type": "python",
             "request": "launch",

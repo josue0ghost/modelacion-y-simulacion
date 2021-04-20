@@ -343,9 +343,6 @@ class TeamData:
 class Game:
     _TeamA = TeamData
     _TeamB = TeamData
-    _ResultA = []
-    _ResultB = []
-    _simulations = []
     _RunsA = 0
     _RunsB = 0
 
@@ -371,52 +368,17 @@ class Game:
     def TeamA(self):
         return self._TeamA
 
-    @TeamA.setter
-    def TeamA(self, teamA):
-        self._TeamA = teamA
-
     @property
     def TeamB(self):
         return self._TeamB
     
-    @TeamB.setter
-    def TeamB(self, teamB):
-        self._TeamB = teamB
-    
-    @property
-    def ResultA(self):
-        return self._ResultA
-    @ResultA.setter
-    def ResultA(self, value):
-        self._ResultA = value
-    
-    @property
-    def ResultB(self):
-        return self._ResultB
-    @ResultB.setter
-    def ResultB(self, value):
-        self._ResultB = value
-    
-    @property
-    def Simulations(self):
-        return list(self._simulations)
-    @Simulations.setter
-    def Simulations(self, value):
-        self._simulations = value
-    
     @property
     def RunsA(self):
-        list=[]
-        for i in self._ResultA:
-            list.append(i.runs)
-        return sum(list)
-        
+        return self._RunsA
+    
     @property
     def RunsB(self):
-        list=[]
-        for i in self._ResultB:
-            list.append(i.runs)
-        return sum(list)
+        return self._RunsB
 
     def playInning(self, data = TeamData):
         def firstElement(list = [], r = 0.0):
@@ -436,7 +398,6 @@ class Game:
             else:                
                 element = firstElement(data.rangeB, rand)
                 action = element.action
-            
             scenario = scenarios[action]
             v_inning = v_inning.add_plate()
             v_inning = v_inning.out(scenario.outs)
@@ -444,44 +405,52 @@ class Game:
                 v_inning = v_inning.move(scenario.moves)
         while v_inning.is_active:
             v_inning = v_inning.out(1)
-
         return v_inning
     
     def __init__(self, a = TeamData, b = TeamData):
+        self._TeamA = a
+        self._TeamB = b
+        ResultA = []
+        ResultB = []
 
-        self.TeamA = a
-        self.TeamB = b
-        self.ResultA = []
-        self.ResultB = []
-        self._simulations = [] 
+        def sumList(lis):
+            rlis=[]
+            for i in lis:
+                rlis.append(i.runs)
+            return sum(rlis)
 
         iterations = 0              
-        while len(self.ResultA) < 9 and len(self.ResultB) < 9:
-            self.ResultA.append(self.playInning(self.TeamA))
-            self.ResultB.append(self.playInning(self.TeamB))
+        while len(ResultA) < 9 and len(ResultB) < 9:
+            ResultA.append(self.playInning(self.TeamA))
+            ResultB.append(self.playInning(self.TeamB))
             iterations += 1
 
         extraInning = 11
+        self._RunsA = sumList(ResultA)
+        self._RunsB = sumList(ResultB)
 
         while self.RunsA == self.RunsB and extraInning > 0:
-            self.ResultA.append(self.playInning(self.TeamA))
-            self.ResultB.append(self.playInning(self.TeamB))
+            ResultA.append(self.playInning(self.TeamA))
+            ResultB.append(self.playInning(self.TeamB))
+            self._RunsA = sumList(ResultA)
+            self._RunsB = sumList(ResultB)
             extraInning += -1
 
         if self.RunsA == self.RunsB:
             random.seed(datetime.datetime.now().microsecond)
             rand = random.random()
             if rand < 0.5:
-                self.ResultA.append(Inning.one_run(True))
-                self.ResultB.append(Inning.one_run(False))
+                ResultA.append(Inning.one_run(True))
+                ResultB.append(Inning.one_run(False))
             else:
-                self.ResultA.append(Inning.one_run(False))
-                self.ResultB.append(Inning.one_run(True))
+                ResultA.append(Inning.one_run(False))
+                ResultB.append(Inning.one_run(True))
+            self._RunsA = sumList(ResultA)
+            self._RunsB = sumList(ResultB)
 
 class Journie:
 
     # Public Attributes
-    games = []
     results = {}
 
     # Private Attributes
@@ -495,14 +464,14 @@ class Journie:
 
 
     def __init__(self, data):
-        self.games = []
+        games = []
         self.results = {}
         for item in data:
             teamDataA = item[0]
             teamDataB = item[1]
-            self.games.append(Game(teamDataA, teamDataB))
+            games.append(Game(teamDataA, teamDataB))
         
-        for item in self.games:
+        for item in games:
             if item.RunsA > item.RunsB:
                 self.results[item.TeamA.Name] = True
                 self.results[item.TeamB.Name] = False
@@ -513,36 +482,26 @@ class Journie:
 class Season:
     # Private attributes
     __results = {}
-    __journies = []
 
     @property
     def results(self):
         return self.__results
-    
-    @property
-    def journies(self):
-        return self.__journies
 
 
     def __init__(self, teams = []):
-
-        self.__journies = []
-
+        journies = []
         for i in range(0, 54):
             serie = self.combination(teams)
             for j in range(0, 3):
                 temp = Journie(serie)
-                self.__journies.append(temp)
-
+                journies.append(temp)
         self.__results = {}
-        
         for item in teams:
             self.__results[item.Name] = [0,0]
-        
 
         listJ = []
         index = 0
-        for j in self.journies:
+        for j in journies:
             obj = type('', (object,), {'res':j.results})()
             listJ.append(obj)
             index += 1
@@ -603,7 +562,6 @@ class Engine:
             'PWD=L0g!n_landivar2o21;'
         )
 
-        
         SQL = """
         SELECT
             1 Id
@@ -832,18 +790,25 @@ print("======================================================")
 cols=['RowNum', 'Season', 'TEAM_ID', 'TEAM_NAME', 'LEAGUE', 'DIVISION', 'WINS', 'LOSSES','LEAGUE_RANK','DIV_RANK','POSTSEASON']
 finalDFR = pd.DataFrame(positonsResults, columns=cols)
 
-f = open('simResults'+ str(yearToSim) +'.txt', 'w')
-f.write(toStr(cols) + '\n')
-for row in positonsResults:
-    f.write(toStr(row) + '\n')
-f.close()
-
 print(finalDFR)
 print("======================================================")
 print("Post Season Tagging Finished")
 print("======================================================")
 
+
+
 #  Verification
+def toStr(l = list, separator = '\t'):
+    s = ''
+    for i in l:
+        s = s + str(i) + separator
+    return s
+
+f = open('simResults'+ str(yearToSim) +'.txt', 'w')
+f.write(toStr(cols) + '\n')
+for row in positonsResults:
+    f.write(toStr(row) + '\n')
+f.close()
 
 def specialTranformation(df):
     lis = df.values.tolist()
@@ -918,11 +883,6 @@ for i in range(0, iterationsCount):
     validations.append(sv)
 
 # print Validations
-def toStr(l = list, separator = '\t'):
-    s = ''
-    for i in l:
-        s = s + str(i) + separator
-    return s
 
 f = open('simResults'+ str(yearToSim) +'.txt', 'w')
 f.write(toStr(cols) + '\n')
