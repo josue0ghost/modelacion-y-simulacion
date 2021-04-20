@@ -200,6 +200,7 @@ class Inning:
             for i in range(4, 0, -1):
                 copy.__bases[i] = copy.__bases[i - 1]
             copy.__bases[0] = False
+
             if copy.__bases[4]:
                 copy.runs += 1
                 copy.__bases[4] = False
@@ -230,8 +231,10 @@ class Inning:
             ini = ini.add_plate()
             ini = ini.move(4)
 
-        for i in range(3):
-            ini = ini.out()
+        #for i in range(3):
+        ini = ini.out()
+        ini = ini.out()
+        ini = ini.out()
         
         return ini
 
@@ -290,50 +293,46 @@ class TeamData:
 
     def __init__(self, teamStats = TeamStats):
         self.Name = teamStats.teamid
-        self.Counters = [Action("base_on_balls", teamStats.base_on_balls),
-        Action("double_played",teamStats.double_played),
-        Action("doubles",teamStats.doubles),
-        Action("fg_outs",teamStats.fg_outs),
-        Action("hit_by_pitch",teamStats.hit_by_pitch),
-        Action("home_runs",teamStats.home_runs),
-        Action("sacrifice",teamStats.sacrifice),
-        Action("singles",teamStats.singles),
-        Action("strike_out",teamStats.strike_out),
-        Action("triple",teamStats.triple)]
+        self.Counters = [
+            Action("base_on_balls", teamStats.base_on_balls),
+            Action("double_played",teamStats.double_played),
+            Action("doubles",teamStats.doubles),
+            Action("fg_outs",teamStats.fg_outs),
+            Action("hit_by_pitch",teamStats.hit_by_pitch),
+            Action("home_runs",teamStats.home_runs),
+            Action("sacrifice",teamStats.sacrifice),
+            Action("singles",teamStats.singles),
+            Action("strike_out",teamStats.strike_out),
+            Action("triple",teamStats.triple)
+            ]
     
         fulldiv = lambda num,dem: float(num)/float(dem)
 
+        ts_plates = teamStats._plates
+        res = teamStats._plates - teamStats._sacrifice - teamStats._double_played
         for item in self.Counters:
-            item.valueA = fulldiv(item.count, teamStats._plates)
+            item.valueA = fulldiv(item.count, ts_plates)
             if item.key == "sacrifice" or item.key == "double_played":
                 item.valueB = 0
             else:
-                item.valueB = fulldiv(item.count, (teamStats._plates - teamStats._sacrifice - teamStats._double_played))
+                item.valueB = fulldiv(item.count, res)
         
-        counter = 0
-        self._rangeA = []
-        listA = []
 
-        for x in self.Counters:
-            #obj = type('', (object,),{'Llave': x.key,'ValorA':x.valueA})()
-            listA.append(x)      
+        listA = [x for x in self.Counters]    
         listA.sort(key=lambda x: x.valueA, reverse=True)
+
+        self._rangeA = []
+        counter = 0
         for item in listA:
             Range_ = Range(counter, item.valueA, item.key)
             self._rangeA.append(Range_)
             counter+=item.valueA
         
-        counter = 0
-
-        self._rangeB = []
-        listB = []
-        
-        for i in self.Counters:
-            if i.key != "sacrifice" and i.key != "double_played":
-                listB.append(i)
-        
+        listB = [i for i in self.Counters if i.key != "sacrifice" and i.key != "double_played"]
         listB.sort(key=lambda x: x.valueB, reverse=True)
 
+        counter = 0
+        self._rangeB = []
         for item in listB:
             Range_ = Range(counter, item.valueB, item.key)
             self._rangeB.append(Range_)
@@ -405,35 +404,29 @@ class Game:
     
     @property
     def RunsA(self):
-        list=[]
-        for i in self._ResultA:
-            list.append(i.runs)
-        return sum(list)
+        ra_list = [i.runs for i in self._ResultA]
+        return sum(ra_list)
         
     @property
     def RunsB(self):
-        list=[]
-        for i in self._ResultB:
-            list.append(i.runs)
-        return sum(list)
+        rb_list = [i.runs for i in self._ResultB]
+        return sum(rb_list)
 
     def playInning(self, data = TeamData):
-        def firstElement(list = [], r = 0.0):
-            for item in list:
-                if item.inRange(r):
-                    return item
-                    
+        d_rangeA = data.rangeA
+        d_rangeB = data.rangeB
+
         scenarios = self.get_bat_scenarios()
         random.seed(datetime.datetime.now().microsecond)
         v_inning = Inning()
-        while v_inning.is_active and v_inning.runs < 9 :
+        while v_inning.is_active: # and v_inning.runs < 9 :
             rand = random.random()
             action = ""
-            if v_inning.have_runners == True:                
-                element = firstElement(data.rangeA, rand)
+            if v_inning.have_runners:  
+                element = next(x for x in d_rangeA if x.inRange(rand))
                 action = element.action
-            else:                
-                element = firstElement(data.rangeB, rand)
+            else:   
+                element = next(x for x in d_rangeB if x.inRange(rand))            
                 action = element.action
             
             scenario = scenarios[action]
@@ -441,6 +434,7 @@ class Game:
             v_inning = v_inning.out(scenario.outs)
             if(v_inning.is_active):
                 v_inning = v_inning.move(scenario.moves)
+
         while v_inning.is_active:
             v_inning = v_inning.out(1)
 
@@ -452,16 +446,12 @@ class Game:
         self.TeamB = b
         self.ResultA = []
         self.ResultB = []
-        self._simulations = [] 
 
-        iterations = 0              
-        while len(self.ResultA) < 9 and len(self.ResultB) < 9:
+        while len(self.ResultA) < 9: # and len(self.ResultB) < 9: (len(self.ResultB) will always be the same as A's)
             self.ResultA.append(self.playInning(self.TeamA))
             self.ResultB.append(self.playInning(self.TeamB))
-            iterations += 1
 
         extraInning = 11
-
         while self.RunsA == self.RunsB and extraInning > 0:
             self.ResultA.append(self.playInning(self.TeamA))
             self.ResultB.append(self.playInning(self.TeamB))
@@ -478,28 +468,20 @@ class Game:
                 self.ResultB.append(Inning.one_run(True))
 
 class Journie:
-
-    # Public Attributes
     games = []
     results = {}
 
-    # Private Attributes
-    # __games = []
-    # __results = {}
-    
     def to_dict(self):
         return {
             'results': self.results
         }
 
-
     def __init__(self, data):
+        
         self.games = []
         self.results = {}
-        for item in data:
-            teamDataA = item[0]
-            teamDataB = item[1]
-            self.games.append(Game(teamDataA, teamDataB))
+        
+        self.games = [Game(item[0], item[1]) for item in data]
         
         for item in self.games:
             if item.RunsA > item.RunsB:
@@ -508,7 +490,7 @@ class Journie:
             else:
                 self.results[item.TeamA.Name] = False
                 self.results[item.TeamB.Name] = True
-        
+
 class Season:
     # Private attributes
     __results = {}
@@ -524,30 +506,17 @@ class Season:
 
 
     def __init__(self, teams = []):
-
-        self.__journies = []
-
-        for i in range(0, 54):
+        for i in  range(54):
             serie = self.combination(teams)
-            for j in range(0, 3):
-                temp = Journie(serie)
-                self.__journies.append(temp)
-
-        self.__results = {}
+            self.__journies += [Journie(serie) for j in range(3)]
         
-        for item in teams:
-            self.__results[item.Name] = [0,0]
-        
-
-        listJ = []
-        index = 0
-        for j in self.journies:
-            obj = type('', (object,), {'res':j.results})()
-            listJ.append(obj)
-            index += 1
+        self.__results = {item.Name:[0,0] for item in teams}
+                
+        listJ = [type('', (object,), {'res':j.results})() for j in self.journies]
 
         for dicc in listJ:
-            for key,value in dicc.res.items():
+            dic = dicc.res.items()
+            for key,value in dic:
                 res = self.__results[key]
                 if value:
                     self.__results[key][0] = res[0] + 1
@@ -560,7 +529,6 @@ class Season:
         copy = cpy.deepcopy(teams)
 
         random.seed(datetime.datetime.now().microsecond)
-        rand = random.random()
 
         while len(copy) > 0:
             index1 = 0
@@ -596,13 +564,12 @@ class Engine:
     def __init__(self, simulations):
         conn = pyodbc.connect(
             'Driver={SQL Server};'
-            'Server=;'
-            'Database=;'
-            'UID=;'
-            'PWD=;'
+            'Server=url-2021.database.windows.net;'
+            'Database=mys_url;'
+            'UID=url_2021;'
+            'PWD=L0g!n_landivar2o21;'
         )
 
-        
         SQL = "SELECT * FROM teamStats"
         df = pd.read_sql_query(SQL, conn)
 
@@ -619,7 +586,7 @@ class Engine:
         
         self.teams = {x.teamid: x for x in _stats}
         
-        for index in range(0, simulations):
+        for index in range(simulations):
             print(f"Simulating season #{index+1}... please, wait")
             self.__seasons.append(Season(data))
         
@@ -692,16 +659,17 @@ class SimulationsTeamResults:
     def losses(self):
         return self._losses
 
-eng = Engine(2)
-iteration = 1
+eng = Engine(10)
+season = 1
 rowNum = 0
 results = []
 for item in eng.seasons:
-    for key,value in item.results.items():
+    res = item.results.items()
+    for key,value in res:
         t = eng.teams[key]
-        results.append([rowNum, iteration, key, t.name, t.leagueID, t.divID, value[0], value[1]])
+        results.append([rowNum, season, key, t.name, t.leagueID, t.divID, value[0], value[1]])
         rowNum += 1
-    iteration += 1
+    season += 1
 print("======================================================")
 dfr = pd.DataFrame(results, columns=['RowNum', 'Season', 'TEAM_ID', 'TEAM_NAME', 'LEAGUE', 'DIVISION', 'WINS', 'LOSSES'])
 print(dfr)
@@ -731,7 +699,7 @@ def divisionPosition(sortedDF):
 
 # assign positons
 iterationsCount = int(len(STRlist) / 30)
-for i in range(0, iterationsCount):
+for i in range(iterationsCount):
     seasonNum = i + 1
     nlTable = dfr.query('Season == ' + str(seasonNum) + ' and LEAGUE == "NL"', inplace = False)
     alTable = dfr.query('Season == ' + str(seasonNum) + ' and LEAGUE == "AL"', inplace = False)
@@ -756,7 +724,7 @@ for item in STRlist:
     if(item.divRank == 1):
         item.isInPS = True
 
-for i in range(0, iterationsCount):
+for i in range(iterationsCount):
     seasonNum = i + 1
     def extraInLeague(l):
         def candFilter(strObj):
