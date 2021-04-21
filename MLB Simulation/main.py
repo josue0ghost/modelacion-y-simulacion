@@ -22,7 +22,6 @@ class Action:
         self._key = value
 
 class Range:
-
     # Public Attributes
     action = ""
 
@@ -35,10 +34,10 @@ class Range:
         self.__start = base
         self.__close = base + space
     
-    def inRange(self, number):
+    def in_range(self, number):
         return (self.__start <= number) and (number < self.__close)
 
-    def toString(self):
+    def to_string(self):
         return f"{self.action} | {self.__start} | {self.__close}"
 
 class BatScenario:
@@ -187,6 +186,9 @@ class Inning:
     def have_runners(self):
         return self.__bases.count(True) > 0
 
+    '''
+        Copy an inning
+    '''
     def copy(self):
         copy = Inning()
         copy.runs = self.runs
@@ -194,6 +196,15 @@ class Inning:
         copy.__bases = cpy.deepcopy(self.__bases)
         return copy
 
+    '''
+        Moves n given bases in a inning
+
+        Parámeters:
+        number -- times bases are moving
+
+        Exceptions:
+        if number < 0
+    '''
     def move(self, number=""):
         if number == "":
             copy = self.copy()
@@ -212,6 +223,12 @@ class Inning:
                 number += -1
             return v_copy
 
+    '''
+        Makes n given outs in a inning
+
+        Parameters:
+        number -- amount of outs
+    '''
     def out(self, number=""):
         if number == "":
             copy = self.copy()
@@ -225,21 +242,35 @@ class Inning:
         else:
             return self.copy()
 
+    '''
+        Makes a run in a inning
+
+        If the team is winner, does add_plate() and move(4)
+        Then does out() 3 times
+
+        Parameters:
+        is_winner -- Boolean
+    '''
     def one_run(self, is_winner=True):
         ini = Inning()
         if is_winner:
             ini = ini.add_plate()
             ini = ini.move(4)
 
-        #for i in range(3):
+        # 3 outs
         ini = ini.out()
         ini = ini.out()
         ini = ini.out()
         
         return ini
 
+    '''
+        Simulates an out of the batting player
+        and a runner
+    '''
     def double_play(self):
         copy = self.out()
+
         if copy.__bases[3] == True:
             copy.__bases[3] = False
         elif copy.__bases[2] == True:
@@ -249,6 +280,9 @@ class Inning:
         
         return copy
 
+    '''
+        Simulates adding a player to home
+    '''
     def add_plate(self):
         copy = self.copy()
         copy.__bases[0] = True
@@ -260,11 +294,9 @@ class TeamData:
     _rangeA = []
     _rangeB = []
 
-    
     @property
     def counters(self):
         return {counter.name : counter for counter in self._Counters}
-    
     @counters.setter
     def counters(self, value):
         self._Counters = value
@@ -279,74 +311,75 @@ class TeamData:
     @property
     def rangeB(self):
         return list(self._rangeB)
-    
     @rangeB.setter
     def rangeB(self, value):
         self._rangeB = value
 
-    def to_dict(self):
-        return {
-            'Name': self.Name,
-            'rangeA': [ra.toString() for ra in self._rangeA],
-            'rangeB': [rb.toString() for rb in self._rangeB]
-        }
+    '''
+        Collect the probability data of the two teams
+        participating in a match
 
+        Parameters:
+        teamStats -- statistics of a team
+    '''
     def __init__(self, teamStats = TeamStats):
         self.Name = teamStats.teamid
         self.Counters = [
             Action("base_on_balls", teamStats.base_on_balls),
-            Action("double_played",teamStats.double_played),
-            Action("doubles",teamStats.doubles),
-            Action("fg_outs",teamStats.fg_outs),
-            Action("hit_by_pitch",teamStats.hit_by_pitch),
-            Action("home_runs",teamStats.home_runs),
-            Action("sacrifice",teamStats.sacrifice),
-            Action("singles",teamStats.singles),
-            Action("strike_out",teamStats.strike_out),
-            Action("triple",teamStats.triple)
+            Action("double_played", teamStats.double_played),
+            Action("doubles", teamStats.doubles),
+            Action("fg_outs", teamStats.fg_outs),
+            Action("hit_by_pitch", teamStats.hit_by_pitch),
+            Action("home_runs", teamStats.home_runs),
+            Action("sacrifice", teamStats.sacrifice),
+            Action("singles", teamStats.singles),
+            Action("strike_out", teamStats.strike_out),
+            Action("triple", teamStats.triple)
             ]
     
-        fulldiv = lambda num,dem: float(num)/float(dem)
+        full_div = lambda num,dem: float(num)/float(dem)
 
         ts_plates = teamStats._plates
         res = teamStats._plates - teamStats._sacrifice - teamStats._double_played
+
         for item in self.Counters:
-            item.valueA = fulldiv(item.count, ts_plates)
+            item.valueA = full_div(item.count, ts_plates)
             if item.key == "sacrifice" or item.key == "double_played":
                 item.valueB = 0
             else:
-                item.valueB = fulldiv(item.count, res)
+                item.valueB = full_div(item.count, res)
         
-
-        listA = [x for x in self.Counters]    
-        listA.sort(key=lambda x: x.valueA, reverse=True)
+        list_team_a = [x for x in self.Counters]    
+        list_team_a.sort(key=lambda x: x.valueA, reverse=True)
 
         self._rangeA = []
         counter = 0
-        for item in listA:
+        for item in list_team_a:
             Range_ = Range(counter, item.valueA, item.key)
             self._rangeA.append(Range_)
             counter+=item.valueA
         
-        listB = [i for i in self.Counters if i.key != "sacrifice" and i.key != "double_played"]
-        listB.sort(key=lambda x: x.valueB, reverse=True)
+        list_team_b = [i for i in self.Counters if i.key != "sacrifice" and i.key != "double_played"]
+        list_team_b.sort(key=lambda x: x.valueB, reverse=True)
 
         counter = 0
         self._rangeB = []
-        for item in listB:
+        for item in list_team_b:
             Range_ = Range(counter, item.valueB, item.key)
             self._rangeB.append(Range_)
             counter+=item.valueB
 
 class Game:
-    _TeamA = TeamData
-    _TeamB = TeamData
-    _ResultA = []
-    _ResultB = []
+    _team_a = TeamData
+    _team_b = TeamData
+    _result_a = []
+    _result_b = []
     _simulations = []
-    _RunsA = 0
-    _RunsB = 0
 
+    '''
+        Collect the possible outcomes when a batter
+        goes to a plate
+    '''
     def get_bat_scenarios(self):
         item = [0,"",0,0,0,0,0,0,0,0,0,0,0,"","",""]
         v_team_stats = TeamStats(item)
@@ -367,33 +400,33 @@ class Game:
 
     @property
     def TeamA(self):
-        return self._TeamA
+        return self._team_a
 
     @TeamA.setter
     def TeamA(self, teamA):
-        self._TeamA = teamA
+        self._team_a = teamA
 
     @property
     def TeamB(self):
-        return self._TeamB
+        return self._team_b
     
     @TeamB.setter
     def TeamB(self, teamB):
-        self._TeamB = teamB
+        self._team_b = teamB
     
     @property
     def ResultA(self):
-        return self._ResultA
+        return self._result_a
     @ResultA.setter
     def ResultA(self, value):
-        self._ResultA = value
+        self._result_a = value
     
     @property
     def ResultB(self):
-        return self._ResultB
+        return self._result_b
     @ResultB.setter
     def ResultB(self, value):
-        self._ResultB = value
+        self._result_b = value
     
     @property
     def Simulations(self):
@@ -404,63 +437,79 @@ class Game:
     
     @property
     def RunsA(self):
-        ra_list = [i.runs for i in self._ResultA]
+        ra_list = [i.runs for i in self._result_a]
         return sum(ra_list)
         
     @property
     def RunsB(self):
-        rb_list = [i.runs for i in self._ResultB]
+        rb_list = [i.runs for i in self._result_b]
         return sum(rb_list)
 
+    '''
+        Simulates an inning of a team
+
+        Parameterse:
+        data -- Probabilities of a team -- type: TeamData 
+    '''
     def playInning(self, data = TeamData):
-        d_rangeA = data.rangeA
-        d_rangeB = data.rangeB
+        data_range_a = data.rangeA
+        data_range_b = data.rangeB
 
         scenarios = self.get_bat_scenarios()
         random.seed(datetime.datetime.now().microsecond)
-        v_inning = Inning()
-        while v_inning.is_active: # and v_inning.runs < 9 :
-            rand = random.random()
+        inning_ = Inning()
+
+        while inning_.is_active:
+            rnd = random.random()
             action = ""
-            if v_inning.have_runners:  
-                element = next(x for x in d_rangeA if x.inRange(rand))
+            if inning_.have_runners:  
+                element = next(x for x in data_range_a if x.in_range(rnd))
                 action = element.action
             else:   
-                element = next(x for x in d_rangeB if x.inRange(rand))            
+                element = next(x for x in data_range_b if x.in_range(rnd))            
                 action = element.action
             
             scenario = scenarios[action]
-            v_inning = v_inning.add_plate()
-            v_inning = v_inning.out(scenario.outs)
-            if(v_inning.is_active):
-                v_inning = v_inning.move(scenario.moves)
+            inning_ = inning_.add_plate()
+            inning_ = inning_.out(scenario.outs)
 
-        while v_inning.is_active:
-            v_inning = v_inning.out(1)
+            if(inning_.is_active):
+                inning_ = inning_.move(scenario.moves)
 
-        return v_inning
+        while inning_.is_active:
+            inning_ = inning_.out(1)
+
+        return inning_
     
-    def __init__(self, a = TeamData, b = TeamData):
 
-        self.TeamA = a
-        self.TeamB = b
+    '''
+        Simulates a game between two teams
+
+        Parameters:
+        team_a_data -- Probabilities of team A -- type: TeamData
+        team_b_data -- Probabilities of team B -- type: TeamData
+    '''
+    def __init__(self, team_a_data = TeamData, team_b_data = TeamData):
+
+        self.team_a = team_a_data
+        self.team_b = team_b_data
         self.ResultA = []
         self.ResultB = []
 
         while len(self.ResultA) < 9: # and len(self.ResultB) < 9: (len(self.ResultB) will always be the same as A's)
-            self.ResultA.append(self.playInning(self.TeamA))
-            self.ResultB.append(self.playInning(self.TeamB))
+            self.ResultA.append(self.playInning(self.team_a))
+            self.ResultB.append(self.playInning(self.team_b))
 
         extraInning = 11
         while self.RunsA == self.RunsB and extraInning > 0:
-            self.ResultA.append(self.playInning(self.TeamA))
-            self.ResultB.append(self.playInning(self.TeamB))
+            self.ResultA.append(self.playInning(self.team_a))
+            self.ResultB.append(self.playInning(self.team_b))
             extraInning += -1
 
         if self.RunsA == self.RunsB:
             random.seed(datetime.datetime.now().microsecond)
-            rand = random.random()
-            if rand < 0.5:
+            rnd = random.random()
+            if rnd < 0.5:
                 self.ResultA.append(Inning.one_run(True))
                 self.ResultB.append(Inning.one_run(False))
             else:
@@ -471,11 +520,12 @@ class Journie:
     games = []
     results = {}
 
-    def to_dict(self):
-        return {
-            'results': self.results
-        }
+    '''
+        Simulates a Journie collecting the results
 
+        Parameters:
+        data -- list of teams combinations for matches
+    '''
     def __init__(self, data):
         
         self.games = []
@@ -485,11 +535,11 @@ class Journie:
         
         for item in self.games:
             if item.RunsA > item.RunsB:
-                self.results[item.TeamA.Name] = True
-                self.results[item.TeamB.Name] = False
+                self.results[item.team_a.Name] = True
+                self.results[item.team_b.Name] = False
             else:
-                self.results[item.TeamA.Name] = False
-                self.results[item.TeamB.Name] = True
+                self.results[item.team_a.Name] = False
+                self.results[item.team_b.Name] = True
 
 class Season:
     # Private attributes
@@ -504,26 +554,39 @@ class Season:
     def journies(self):
         return self.__journies
 
+    '''
+        Simulates a Season
+        consisting in 162 games (3 journies * 54)
 
+        Parameters:
+        teams -- list of TeamData of all the teams
+    '''
     def __init__(self, teams = []):
+
         for i in  range(54):
             serie = self.combination(teams)
             self.__journies += [Journie(serie) for j in range(3)]
         
         self.__results = {item.Name:[0,0] for item in teams}
                 
-        listJ = [type('', (object,), {'res':j.results})() for j in self.journies]
+        journies_list = [type('', (object,), {'res':j.results})() for j in self.journies]
 
-        for dicc in listJ:
-            dic = dicc.res.items()
-            for key,value in dic:
+        for dicc in journies_list:
+            results = dicc.res.items()
+            for key,value in results:
                 res = self.__results[key]
                 if value:
                     self.__results[key][0] = res[0] + 1
                 else:
                     self.__results[key][1] = res[1] + 1
-        #end
+        
 
+    '''
+        Returns posible combinations of teams for matches
+
+        Parameters:
+        teams -- list of TeamData of all the teams
+    '''
     def combination(self, teams=[]):
         combs = []
         copy = cpy.deepcopy(teams)
@@ -538,11 +601,11 @@ class Season:
                 index1 = random.randint(0, len(copy)-1)
                 index2 = random.randint(0, len(copy)-1)
 
-            teamData = [
+            team_data = [
                 copy[index1],
                 copy[index2]
             ]
-            combs.append(teamData)
+            combs.append(team_data)
 
             if index1 > index2:
                 copy.pop(index1)
@@ -561,6 +624,12 @@ class Engine:
     seasons = []
     teams = {}
 
+    '''
+        Runs n given Season simulations
+
+        Parameters:
+        simulations -- number of Season to simulate
+    '''
     def __init__(self, simulations):
         conn = pyodbc.connect(
             'Driver={SQL Server};'
@@ -577,12 +646,11 @@ class Engine:
         data = []
         _stats = []
         
-        index = 0
         for item in stats:
             st = TeamStats(item)
             data.append(TeamData(st))
             _stats.append(st)
-            index += 1
+
         
         self.teams = {x.teamid: x for x in _stats}
         
@@ -595,57 +663,57 @@ class Engine:
 # Post Season Tagging
 
 class SimulationsTeamResults:
-    _strID = 0
+    _sims_team_res_id = 0
     _iteracion = 0
-    _teamID = ""
-    _teamName = ""
+    _team_id = ""
+    _team_name = ""
     _league = ""
     _division = ""
     _wins = 0
     _losses = 0
 
-    leagueRank = 0
-    divRank = 0
-    isInPS = ""
+    league_rank = 0
+    division_rank = 0
+    is_in_post_season = False
 
-    def toRow(self):
+    def to_row(self):
         row = []
-        row.append(self._strID)
+        row.append(self._sims_team_res_id)
         row.append(self._iteracion)
-        row.append(self._teamID)
-        row.append(self._teamName)
+        row.append(self._team_id)
+        row.append(self._team_name)
         row.append(self._league)
         row.append(self._division)
         row.append(self._wins)
         row.append(self._losses)
-        row.append(self.leagueRank)
-        row.append(self.divRank)
-        row.append(self.isInPS)
+        row.append(self.league_rank)
+        row.append(self.division_rank)
+        row.append(self.is_in_post_season)
         return row
 
     def __init__(self, item):
-        self._strID = item[0]
+        self._sims_team_res_id = item[0]
         self._iteracion = item[1]
-        self._teamID = item[2]
-        self._teamName = item[3]
+        self._team_id = item[2]
+        self._team_name = item[3]
         self._league = item[4]
         self._division = item[5]
         self._wins = item[6]
         self._losses = item[7]
-        self.isInPS = False
+        self.is_in_post_season = False
     
     @property
     def strID(self):
-        return self._strID
+        return self._sims_team_res_id
     @property
     def iteration(self):
         return self._iteracion
     @property
     def teamID(self):
-        return self._teamID
+        return self._team_id
     @property
     def teamName(self):
-        return self._teamName
+        return self._team_name
     @property
     def league(self):
         return self._league
@@ -659,100 +727,107 @@ class SimulationsTeamResults:
     def losses(self):
         return self._losses
 
+# MAIN EXCECUTION
+
 eng = Engine(10)
 season = 1
-rowNum = 0
+row = 0
 results = []
 for item in eng.seasons:
     res = item.results.items()
     for key,value in res:
         t = eng.teams[key]
-        results.append([rowNum, season, key, t.name, t.leagueID, t.divID, value[0], value[1]])
-        rowNum += 1
+        results.append([row, season, key, t.name, t.leagueID, t.divID, value[0], value[1]])
+        row += 1
     season += 1
+
 print("======================================================")
-dfr = pd.DataFrame(results, columns=['RowNum', 'Season', 'TEAM_ID', 'TEAM_NAME', 'LEAGUE', 'DIVISION', 'WINS', 'LOSSES'])
+dfr = pd.DataFrame(results, columns=['Row', 'Season', 'TEAM_ID', 'TEAM_NAME', 'LEAGUE', 'DIVISION', 'WINS', 'LOSSES'])
 print(dfr)
 print("======================================================")
 print("Simulation finished")
 
-STRlist = []
-dfr.sort_values(by='RowNum', ascending=True, inplace=True)
+sims_team_result_list = []
+dfr.sort_values(by='Row', ascending=True, inplace=True)
 for line in dfr.values.tolist():
-    STRlist.append(SimulationsTeamResults(line))
+    sims_team_result_list.append(SimulationsTeamResults(line))
 
 # functions to assign positions
-def leaguePosition(sortedDF):
-    lpos = 1
-    lis = sortedDF.values.tolist()
-    for row in lis:
-        rowNum = row[0]
-        STRlist[rowNum].leagueRank = lpos
-        lpos += 1
-def divisionPosition(sortedDF):
-    dpos = 1
-    lis = sortedDF.values.tolist()
-    for row in lis:
-        rowNum = row[0]
-        STRlist[rowNum].divRank = dpos
-        dpos += 1
+def league_position(sorted_data_frame):
+    league_pos = 1
+    sorted_df_list = sorted_data_frame.values.tolist()
+    for row in sorted_df_list:
+        row_num = row[0]
+        sims_team_result_list[row_num].league_rank = league_pos
+        league_pos += 1
+
+def division_position(sorted_data_frame):
+    division_pos = 1
+    sorted_df_list = sorted_data_frame.values.tolist()
+    for row in sorted_df_list:
+        row_num = row[0]
+        sims_team_result_list[row_num].division_rank = division_pos
+        division_pos += 1
 
 # assign positons
-iterationsCount = int(len(STRlist) / 30)
-for i in range(iterationsCount):
-    seasonNum = i + 1
-    nlTable = dfr.query('Season == ' + str(seasonNum) + ' and LEAGUE == "NL"', inplace = False)
-    alTable = dfr.query('Season == ' + str(seasonNum) + ' and LEAGUE == "AL"', inplace = False)
+iterations = int(len(sims_team_result_list) / 30)
+
+for i in range(iterations):
+    season = i + 1
+    national_league_df = dfr.query('Season == ' + str(season) + ' and LEAGUE == "NL"', inplace = False)
+    american_league_df = dfr.query('Season == ' + str(season) + ' and LEAGUE == "AL"', inplace = False)
+
     # sort for position in league
-    nlTable.sort_values(by=['WINS'], ascending=False, inplace=True)
-    leaguePosition(nlTable)
-    alTable.sort_values(by=['WINS'], ascending=False, inplace=True)
-    leaguePosition(alTable)
+    national_league_df.sort_values(by=['WINS'], ascending=False, inplace=True)
+    league_position(national_league_df)
+
+    american_league_df.sort_values(by=['WINS'], ascending=False, inplace=True)
+    league_position(american_league_df)
+
     # sort for positions in Division
-    for div in ["W","C","E"]:
+    for division in ["W","C","E"]:
         # NL
-        qd = 'DIVISION == "' + div + '"'
-        nldTable = nlTable.query(qd, inplace=False)
-        nldTable.sort_values(by=['WINS'], ascending=False, inplace=True)
-        divisionPosition(nldTable)
+        qd = 'DIVISION == "' + division + '"'
+        national_league_division_df = national_league_df.query(qd, inplace=False)
+        national_league_division_df.sort_values(by=['WINS'], ascending=False, inplace=True)
+        division_position(national_league_division_df)
         # AL
-        aldTable = alTable.query(qd, inplace=False)
-        aldTable.sort_values(by=['WINS'], ascending=False, inplace=True)
-        divisionPosition(aldTable)
+        american_league_division_df = american_league_df.query(qd, inplace=False)
+        american_league_division_df.sort_values(by=['WINS'], ascending=False, inplace=True)
+        division_position(american_league_division_df)
+
 # rules for Post Season
-for item in STRlist:
-    if(item.divRank == 1):
-        item.isInPS = True
+for item in sims_team_result_list:
+    if(item.division_rank == 1):
+        item.is_in_post_season = True
 
-for i in range(iterationsCount):
-    seasonNum = i + 1
-    def extraInLeague(l):
-        def candFilter(strObj):
+for i in range(iterations):
+    season = i + 1
+    def extra_in_league(l):
+        def candidates_filter(str_obj=SimulationsTeamResults):
             val = True
-            val = val & (strObj.iteration == seasonNum)
-            val = val & (strObj.divRank != 1)
-            val = val & (strObj.league == l)
+            val = val & (str_obj.iteration == season)
+            val = val & (str_obj.division_rank != 1)
+            val = val & (str_obj.league == l)
             return val
-        candidateList = list(filter(candFilter, STRlist))
-        candidateList.sort(key=lambda x: x.leagueRank)
 
-        teamid_A = candidateList[0].strID
-        teamid_B = candidateList[1].strID
+        candidates_list = list(filter(candidates_filter, sims_team_result_list))
+        candidates_list.sort(key=lambda x: x.league_rank)
 
-        STRlist[teamid_A].isInPS = True
-        STRlist[teamid_B].isInPS = True
+        teamid_A = candidates_list[0].strID
+        teamid_B = candidates_list[1].strID
 
-    extraInLeague("NL")
-    extraInLeague("AL")
+        sims_team_result_list[teamid_A].is_in_post_season = True
+        sims_team_result_list[teamid_B].is_in_post_season = True
 
-positonsResults = []
-for item in STRlist:
-    positonsResults.append(item.toRow())
+    extra_in_league("NL")
+    extra_in_league("AL")
+
+positions_results = [item.to_row() for item in sims_team_result_list]
+
 print("======================================================")
-cols=['RowNum', 'Season', 'TEAM_ID', 'TEAM_NAME', 'LEAGUE', 'DIVISION', 'WINS', 'LOSSES','LEAGUE_RANK','DIV_RANK','POSTSEASON']
-finalDFR = pd.DataFrame(positonsResults, columns=cols)
-print(finalDFR)
+cols=['Row', 'Season', 'TEAM_ID', 'TEAM_NAME', 'LEAGUE', 'DIVISION', 'WINS', 'LOSSES','LEAGUE_RANK','DIV_RANK','POSTSEASON']
+final_results_df = pd.DataFrame(positions_results, columns=cols)
+print(final_results_df)
 print("======================================================")
 print("Post Season Tagging Finished")
-
-
